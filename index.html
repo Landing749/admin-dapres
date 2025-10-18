@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin — Dr. Alfredo Pio De Roda</title>
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;background:#f7f9fc;margin:0;color:#222}
+    header{background:#111827;color:#fff;padding:1rem;text-align:center}
+    main{padding:1.5rem;max-width:1000px;margin:0 auto}
+    .card{background:#fff;padding:1rem;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:1rem}
+    input,textarea,button{width:100%;padding:10px;margin-top:8px;border-radius:6px;border:1px solid #ccc}
+    .row{display:flex;gap:12px}
+    .col{flex:1}
+    .small{font-size:0.9rem;color:#666}
+    .btn{background:#2f66c7;color:#fff;border:none;padding:10px;border-radius:6px;cursor:pointer}
+  </style>
+</head>
+<body>
+  <header><h1>Admin Panel — Dr. Alfredo Pio De Roda</h1></header>
+  <main>
+
+    <section class="card">
+      <h2>Post Announcement</h2>
+      <input id="annTitle" placeholder="Title" />
+      <textarea id="annMessage" placeholder="Message" rows="4"></textarea>
+      <div class="row">
+        <input id="annDate" type="datetime-local" class="col" />
+        <button class="btn" id="postAnnBtn">Post Announcement</button>
+      </div>
+      <div id="ann-msg" class="small"></div>
+    </section>
+
+    <section class="card">
+      <h2>Add Teacher</h2>
+      <input id="tName" placeholder="Full name" />
+      <input id="tPosition" placeholder="Position (e.g. Grade 1 Teacher)" />
+      <input id="tPhoto" placeholder="Photo URL (optional)" />
+      <button class="btn" id="addTeacherBtn">Add Teacher</button>
+      <div id="teacher-msg" class="small"></div>
+    </section>
+
+    <section class="card">
+      <h2>Quick View</h2>
+      <div><strong>Announcements</strong></div>
+      <ul id="ann-list"></ul>
+      <div style="height:12px"></div>
+      <div><strong>Teachers</strong></div>
+      <ul id="teacher-list"></ul>
+    </section>
+
+  </main>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import { getDatabase, ref, push, onValue, query, orderByChild } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAYpXaL6oNhuX3LWAinx7LmhrAozfVzCvk",
+      authDomain: "dr-de-roda-lr-portal.firebaseapp.com",
+      databaseURL: "https://dr-de-roda-lr-portal-default-rtdb.firebaseio.com/",
+      projectId: "dr-de-roda-lr-portal",
+      storageBucket: "dr-de-roda-lr-portal.firebasestorage.app",
+      messagingSenderId: "1074205661200",
+      appId: "1:1074205661200:web:f42d20c85f8600728cd295",
+      measurementId: "G-MJF7Z2DYHS"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    document.getElementById("postAnnBtn").addEventListener("click", async () => {
+      const title = document.getElementById("annTitle").value.trim();
+      const message = document.getElementById("annMessage").value.trim();
+      let dateVal = document.getElementById("annDate").value;
+      const dateISO = dateVal ? new Date(dateVal).toISOString() : new Date().toISOString();
+
+      if (!title || !message) {
+        showSmall("ann-msg", "Title and message required", true);
+        return;
+      }
+      try {
+        await push(ref(db, "announcements"), { title, message, date: dateISO });
+        showSmall("ann-msg", "Announcement posted.", false);
+        document.getElementById("annTitle").value = "";
+        document.getElementById("annMessage").value = "";
+        document.getElementById("annDate").value = "";
+      } catch (err) {
+        console.error(err);
+        showSmall("ann-msg", "Failed to post announcement.", true);
+      }
+    });
+
+    document.getElementById("addTeacherBtn").addEventListener("click", async () => {
+      const name = document.getElementById("tName").value.trim();
+      const position = document.getElementById("tPosition").value.trim();
+      const photo = document.getElementById("tPhoto").value.trim();
+      if (!name || !position) {
+        showSmall("teacher-msg", "Name and position required", true);
+        return;
+      }
+      try {
+        await push(ref(db, "teachers"), { name, position, photo });
+        showSmall("teacher-msg", "Teacher added.", false);
+        document.getElementById("tName").value = "";
+        document.getElementById("tPosition").value = "";
+        document.getElementById("tPhoto").value = "";
+      } catch (err) {
+        console.error(err);
+        showSmall("teacher-msg", "Failed to add teacher.", true);
+      }
+    });
+
+    onValue(query(ref(db, "announcements"), orderByChild("date")), snap => {
+      const ul = document.getElementById("ann-list");
+      ul.innerHTML = "";
+      if (!snap.exists()) {
+        ul.innerHTML = "<li>No announcements</li>";
+        return;
+      }
+      const items = [];
+      snap.forEach(c => items.push(c.val()));
+      items.reverse().forEach(a => {
+        const d = a.date ? new Date(a.date).toLocaleString() : "";
+        const li = document.createElement("li");
+        li.innerHTML = `<strong>${escapeHtml(a.title)}</strong> — ${escapeHtml(d)}<div class="small">${escapeHtml(a.message)}</div>`;
+        ul.appendChild(li);
+      });
+    });
+
+    onValue(ref(db, "teachers"), snap => {
+      const ul = document.getElementById("teacher-list");
+      ul.innerHTML = "";
+      if (!snap.exists()) {
+        ul.innerHTML = "<li>No teachers</li>";
+        return;
+      }
+      snap.forEach(c => {
+        const t = c.val();
+        const li = document.createElement("li");
+        li.innerHTML = `${escapeHtml(t.name)} — <em>${escapeHtml(t.position)}</em>`;
+        ul.appendChild(li);
+      });
+    });
+
+    function showSmall(id, msg, isErr){
+      const el = document.getElementById(id);
+      el.style.color = isErr ? "crimson" : "green";
+      el.textContent = msg;
+      setTimeout(()=> el.textContent = "", 6000);
+    }
+    function escapeHtml(s){
+      if(!s) return "";
+      return String(s)
+        .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;").replaceAll("'", "&#39;");
+    }
+  </script>
+</body>
+</html>
