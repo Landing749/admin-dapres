@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Enrollment Records — Dr. Alfredo Pio De Roda</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f7f9fc;
+      color: #222;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      color: #0056b3;
+    }
+    #top-bar {
+      text-align: center;
+      margin-bottom: 15px;
+    }
+    select, button.export {
+      margin: 10px;
+      padding: 10px 14px;
+      font-size: 15px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+    .export {
+      background: #2ecc71;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    .export:hover {
+      background: #27ae60;
+    }
+    .card {
+      background: white;
+      border-radius: 10px;
+      margin: 10px auto;
+      padding: 15px;
+      width: 90%;
+      max-width: 600px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .card:hover {
+      transform: scale(1.02);
+    }
+    .card-content {
+      display: none;
+      margin-top: 10px;
+    }
+    .delete {
+      background: #e74c3c;
+      color: white;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .delete:hover {
+      background: #c0392b;
+    }
+  </style>
+</head>
+<body>
+  <h1>Enrollment Records</h1>
+
+  <div id="top-bar">
+    <select id="gradeSelect">
+      <option value="">Select Grade Level</option>
+      <option value="Kinder">Kinder</option>
+      <option value="G1">Grade 1</option>
+      <option value="G2">Grade 2</option>
+      <option value="G3">Grade 3</option>
+      <option value="G4">Grade 4</option>
+      <option value="G5">Grade 5</option>
+      <option value="G6">Grade 6</option>
+    </select>
+    <button class="export" id="downloadCsv" disabled>⬇️ Download CSV</button>
+  </div>
+
+  <div id="results"><em>Please select a grade level.</em></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import { getDatabase, ref, onValue, remove, update } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAYpXaL6oNhuX3LWAinx7LmhrAozfVzCvk",
+      authDomain: "dr-de-roda-lr-portal.firebaseapp.com",
+      projectId: "dr-de-roda-lr-portal",
+      storageBucket: "dr-de-roda-lr-portal.firebasestorage.app",
+      messagingSenderId: "1074205661200",
+      appId: "1:1074205661200:web:f42d20c85f8600728cd295",
+      measurementId: "G-MJF7Z2DYHS",
+      databaseURL: "https://dr-de-roda-lr-portal-default-rtdb.firebaseio.com/"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const gradeSelect = document.getElementById("gradeSelect");
+    const results = document.getElementById("results");
+    const downloadCsv = document.getElementById("downloadCsv");
+
+    let currentData = [];
+
+    gradeSelect.addEventListener("change", () => {
+      const grade = gradeSelect.value;
+      downloadCsv.disabled = !grade;
+      if (!grade) {
+        results.innerHTML = "<em>Please select a grade level.</em>";
+        return;
+      }
+
+      results.innerHTML = "<em>Loading...</em>";
+      const gradeRef = ref(db, `enrollments/${grade}`);
+
+      onValue(gradeRef, (snapshot) => {
+        if (!snapshot.exists()) {
+          results.innerHTML = "<strong>No enrollments found for this grade.</strong>";
+          currentData = [];
+          return;
+        }
+
+        let html = "";
+        let queueCounter = 1;
+        currentData = [];
+
+        snapshot.forEach((child) => {
+          const id = child.key;
+          const data = child.val();
+
+          // Auto-generate missing Control/Queue numbers
+          if (!data.controlNo || !data.queueNo) {
+            const updates = {};
+            if (!data.controlNo) updates[`enrollments/${grade}/${id}/controlNo`] = "CTRL-" + Date.now();
+            if (!data.queueNo) updates[`enrollments/${grade}/${id}/queueNo`] = queueCounter++;
+            update(ref(db), updates);
+          }
+
+          html += `
+            <div class="card" data-id="${id}">
+              <strong>${data.studentName || "Unnamed Student"}</strong>
+              <div class="card-content">
+                <p><b>Parent:</b> ${data.parentName || "N/A"}</p>
+                <p><b>LRN:</b> ${data.lrn || "N/A"}</p>
+                <p><b>Control No.:</b> ${data.controlNo || "(Generating...)"}</p>
+                <p><b>Queue No.:</b> ${data.queueNo || "(Generating...)"}</p>
+                <button class="delete" data-delete="${id}">Mark as Processed (Delete)</button>
+              </div>
+            </div>`;
+
+          currentData.push({
+            studentName: data.studentName || "Unnamed Student",
+            parentName: data.parentName || "N/A",
+            lrn: data.lrn || "N/A",
+            controlNo: data.controlNo || "",
+            queueNo: data.queueNo || "",
+          });
+        });
+
+        results.innerHTML = html;
+
+        document.querySelectorAll(".card").forEach((card) => {
+          const content = card.querySelector(".card-content");
+          card.addEventListener("click", (e) => {
+            if (e.target.tagName === "BUTTON") return;
+            content.style.display = content.style.display === "block" ? "none" : "block";
+          });
+        });
+
+        document.querySelectorAll(".delete").forEach((btn) => {
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const id = btn.dataset.delete;
+            if (confirm("Mark this enrollment as processed? This will delete it.")) {
+              remove(ref(db, `enrollments/${grade}/${id}`));
+            }
+          });
+        });
+      });
+    });
+
+    // 📥 CSV Export
+    downloadCsv.addEventListener("click", () => {
+      if (!currentData.length) {
+        alert("No data to export!");
+        return;
+      }
+      const grade = gradeSelect.value;
+      const csvHeader = "Student Name,Parent Name,LRN,Control No,Queue No\n";
+      const csvRows = currentData.map(
+        d => `"${d.studentName}","${d.parentName}","${d.lrn}","${d.controlNo}","${d.queueNo}"`
+      );
+      const csvContent = csvHeader + csvRows.join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${grade}_enrollments.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  </script>
+</body>
+</html>
