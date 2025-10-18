@@ -1,163 +1,254 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Enrollment Records — Dr. Alfredo Pio De Roda School</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Enrollment Records — Admin</title>
   <style>
+    :root {
+      --primary: #2f66c7;
+      --muted: #7b8794;
+      --bg: #f4f6fb;
+    }
     body {
-      font-family: "Poppins", sans-serif;
-      background: #f8f9fa;
-      padding: 40px;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      margin: 0;
+      padding: 20px;
+      color: #222;
     }
-    h1 {
-      text-align: center;
-      color: #004aad;
+    h1 { text-align:center; color:var(--primary); margin-bottom:14px; }
+    .controls { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-bottom:16px; }
+    select, input[type="search"], button {
+      padding:10px 12px;
+      border-radius:8px;
+      border:1px solid #cfd8e3;
+      font-size:14px;
     }
-    #searchBar {
-      display: block;
-      width: 100%;
-      max-width: 400px;
-      margin: 20px auto 30px;
-      padding: 10px 14px;
-      border: 2px solid #004aad;
-      border-radius: 10px;
-      font-size: 15px;
-      outline: none;
+    input[type="search"] { width:280px; max-width:90%; }
+    .container { max-width:920px; margin: 0 auto; }
+    .card { background:#fff; border-radius:12px; box-shadow:0 3px 10px rgba(20,30,60,0.06); margin:12px 0; overflow:hidden; }
+    .card-header { background:var(--primary); color:#fff; padding:12px 16px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; }
+    .card-header h3 { margin:0; font-size:16px; }
+    .card-body { padding:14px 16px; display:none; }
+    .field { margin:6px 0; font-size:14px; }
+    .copy-btn, .del-btn {
+      background:var(--primary); color:#fff; border:none; padding:6px 8px; border-radius:6px; cursor:pointer; font-size:13px;
     }
-    #searchBar:focus {
-      box-shadow: 0 0 6px rgba(0,74,173,0.4);
-    }
-    .record {
-      background: #fff;
-      border-radius: 12px;
-      padding: 15px 20px;
-      margin-bottom: 12px;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.1);
-    }
-    .record-header {
-      display: flex;
-      justify-content: space-between;
-      cursor: pointer;
-      font-weight: bold;
-      color: #004aad;
-    }
-    .record-details {
-      display: none;
-      margin-top: 10px;
-      font-size: 15px;
-    }
-    button.copy {
-      background: #004aad;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      padding: 4px 8px;
-      cursor: pointer;
-      font-size: 13px;
-      margin-left: 6px;
-    }
-    button.copy:hover {
-      background: #003580;
-    }
-    .delete {
-      background: crimson;
-      color: white;
-      border: none;
-      padding: 6px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      margin-top: 10px;
-    }
+    .del-btn { background:#e74c3c; margin-left:8px; }
+    .muted { color:var(--muted); font-size:13px; }
+    .no-results { text-align:center; color:var(--muted); margin-top:20px; }
   </style>
 </head>
 <body>
+  <div class="container">
+    <h1>Enrollment Records</h1>
 
-  <h1>Enrollment Records</h1>
-  <input type="text" id="searchBar" placeholder="Search by name, grade, or control number...">
-  <div id="records"></div>
+    <div class="controls">
+      <select id="gradeSelect" aria-label="Select grade">
+        <option value="">-- Select Grade Level --</option>
+        <option value="Kinder">Kinder</option>
+        <option value="G1">G1</option>
+        <option value="G2">G2</option>
+        <option value="G3">G3</option>
+        <option value="G4">G4</option>
+        <option value="G5">G5</option>
+        <option value="G6">G6</option>
+      </select>
 
+      <input type="search" id="searchInput" placeholder="Search by student / parent / control no..." disabled>
+      <button id="clearSearch">Clear</button>
+    </div>
+
+    <div id="listArea">
+      <p class="no-results">Please select a grade to load enrollments.</p>
+    </div>
+  </div>
+
+  <!-- Firebase modular SDK (Realtime DB) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-    import { getDatabase, ref, get, remove } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+    import { getDatabase, ref, onValue, remove } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyAYpXaL6oNhuX3LWAinx7LmhrAozfVzCvk",
       authDomain: "dr-de-roda-lr-portal.firebaseapp.com",
-      databaseURL: "https://dr-de-roda-lr-portal-default-rtdb.firebaseio.com/",
       projectId: "dr-de-roda-lr-portal",
       storageBucket: "dr-de-roda-lr-portal.firebasestorage.app",
       messagingSenderId: "1074205661200",
       appId: "1:1074205661200:web:f42d20c85f8600728cd295",
-      measurementId: "G-MJF7Z2DYHS"
+      measurementId: "G-MJF7Z2DYHS",
+      databaseURL: "https://dr-de-roda-lr-portal-default-rtdb.firebaseio.com/"
     };
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
-    const recordsDiv = document.getElementById("records");
-    const searchBar = document.getElementById("searchBar");
 
-    function copyToClipboard(text) {
-      navigator.clipboard.writeText(text);
-      alert(`Copied: ${text}`);
-    }
+    const gradeSelect = document.getElementById('gradeSelect');
+    const searchInput = document.getElementById('searchInput');
+    const clearSearch = document.getElementById('clearSearch');
+    const listArea = document.getElementById('listArea');
 
-    function createRecordCard(grade, student, data, key) {
-      const card = document.createElement("div");
-      card.className = "record";
-      card.dataset.search = `${student.toLowerCase()} ${grade.toLowerCase()} ${(data.controlNo || "").toLowerCase()}`;
+    let currentGrade = "";
+    let students = []; // array of { key, data, normalizedSearch }
 
-      card.innerHTML = `
-        <div class="record-header">${student} — ${grade}</div>
-        <div class="record-details">
-          <p><b>Parent:</b> ${data.parent} <button class="copy" onclick="copyToClipboard('${data.parent}')">Copy</button></p>
-          <p><b>Email:</b> ${data.email} <button class="copy" onclick="copyToClipboard('${data.email}')">Copy</button></p>
-          <p><b>Phone:</b> ${data.phone} <button class="copy" onclick="copyToClipboard('${data.phone}')">Copy</button></p>
-          <p><b>Grade Level:</b> ${grade} <button class="copy" onclick="copyToClipboard('${grade}')">Copy</button></p>
-          <p><b>LRN:</b> ${data.lrn} <button class="copy" onclick="copyToClipboard('${data.lrn}')">Copy</button></p>
-          <p><b>Control No.:</b> ${data.controlNo || "—"} <button class="copy" onclick="copyToClipboard('${data.controlNo || ""}')">Copy</button></p>
-          <button class="delete" onclick="deleteRecord('${grade}', '${key}', this)">Delete</button>
-        </div>
-      `;
-      card.querySelector(".record-header").addEventListener("click", () => {
-        const details = card.querySelector(".record-details");
-        details.style.display = details.style.display === "block" ? "none" : "block";
-      });
-      recordsDiv.appendChild(card);
-    }
+    // normalize helper: remove extra spaces, lowercase
+    const normalize = s => (s||"").toString().trim().toLowerCase().replace(/\s+/g, ' ');
 
-    async function loadRecords() {
-      const grades = ["Kinder", "G1", "G2", "G3", "G4", "G5", "G6"];
-      for (const grade of grades) {
-        const snap = await get(ref(db, `enrollments/${grade}`));
-        if (snap.exists()) {
-          const data = snap.val();
-          Object.keys(data).forEach((key) => {
-            createRecordCard(grade, key, data[key], key);
+    // render cards from a list of student objects
+    function renderList(list) {
+      listArea.innerHTML = "";
+      if (!list.length) {
+        listArea.innerHTML = '<p class="no-results">No enrollments found.</p>';
+        return;
+      }
+
+      for (const item of list) {
+        const d = item.data;
+        const key = item.key;
+
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div class="card-header">
+            <h3>${escapeHtml(d.studentName || "Unnamed Student")}</h3>
+            <span class="muted">${escapeHtml(d.controlNo || '')}</span>
+          </div>
+          <div class="card-body">
+            <div class="field"><strong>Student:</strong> ${escapeHtml(d.studentName||'')} <button class="copy-btn" data-copy="${escapeHtml(d.studentName||'')}">Copy</button></div>
+            <div class="field"><strong>Parent:</strong> ${escapeHtml(d.parentName||'')} <button class="copy-btn" data-copy="${escapeHtml(d.parentName||'')}">Copy</button></div>
+            <div class="field"><strong>Email:</strong> ${escapeHtml(d.email||'')} <button class="copy-btn" data-copy="${escapeHtml(d.email||'')}">Copy</button></div>
+            <div class="field"><strong>Phone:</strong> ${escapeHtml(d.phone||'')} <button class="copy-btn" data-copy="${escapeHtml(d.phone||'')}">Copy</button></div>
+            <div class="field"><strong>LRN:</strong> ${escapeHtml(d.lrn||'')} <button class="copy-btn" data-copy="${escapeHtml(d.lrn||'')}">Copy</button></div>
+            <div class="field"><strong>Control No.:</strong> ${escapeHtml(d.controlNo||'')} <button class="copy-btn" data-copy="${escapeHtml(d.controlNo||'')}">Copy</button></div>
+            <div style="margin-top:10px">
+              <button class="del-btn" data-key="${key}">Mark as Processed (Delete)</button>
+            </div>
+          </div>
+        `;
+
+        // expand/collapse
+        const header = card.querySelector('.card-header');
+        const body = card.querySelector('.card-body');
+        header.addEventListener('click', () => {
+          body.style.display = body.style.display === 'block' ? 'none' : 'block';
+        });
+
+        // copy buttons
+        card.querySelectorAll('[data-copy]').forEach(btn => {
+          btn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            const text = btn.getAttribute('data-copy') || '';
+            if (!text) return alert('Nothing to copy');
+            navigator.clipboard.writeText(text).then(()=>{
+              // small non-blocking feedback
+              btn.textContent = 'Copied';
+              setTimeout(()=> btn.textContent = 'Copy', 900);
+            });
           });
+        });
+
+        // delete
+        const del = card.querySelector('.del-btn');
+        del.addEventListener('click', async (ev) => {
+          ev.stopPropagation();
+          const keyToDelete = del.getAttribute('data-key');
+          if (!confirm('Mark this enrollment as processed? This will delete it.')) return;
+          try {
+            await remove(ref(db, `enrollments/${currentGrade}/${keyToDelete}`));
+            // remove from local array and re-render
+            students = students.filter(s => s.key !== keyToDelete);
+            applySearchAndRender();
+          } catch (err) {
+            console.error(err);
+            alert('Delete failed. Check console.');
+          }
+        });
+
+        listArea.appendChild(card);
+      }
+    }
+
+    // apply search term to students then render
+    function applySearchAndRender() {
+      const term = normalize(searchInput.value || "");
+      if (!term) {
+        renderList(students);
+        return;
+      }
+      const filtered = students.filter(s => s.normalizedSearch.includes(term));
+      renderList(filtered);
+    }
+
+    // escape helper
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replaceAll('&','&amp;')
+        .replaceAll('<','&lt;')
+        .replaceAll('>','&gt;')
+        .replaceAll('"','&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    // grade selection - listen to realtime node
+    let unsubscribe = null;
+    gradeSelect.addEventListener('change', () => {
+      const grade = gradeSelect.value;
+      currentGrade = grade;
+      searchInput.value = '';
+      if (!grade) {
+        listArea.innerHTML = '<p class="no-results">Please select a grade to load enrollments.</p>';
+        searchInput.disabled = true;
+        students = [];
+        return;
+      }
+
+      searchInput.disabled = false;
+      listArea.innerHTML = '<p class="no-results">Loading...</p>';
+
+      // detach previous listener if any by reloading page-level variable:
+      // using onValue returns an unsubscribe via the SDK if needed; simplest approach: rely on single onValue per grade
+      const gradeRef = ref(db, `enrollments/${grade}`);
+      // listen for realtime updates
+      onValue(gradeRef, (snapshot) => {
+        students = [];
+        if (!snapshot.exists()) {
+          listArea.innerHTML = '<p class="no-results">No enrollments found for this grade.</p>';
+          return;
         }
-      }
-    }
 
-    window.copyToClipboard = copyToClipboard;
+        snapshot.forEach(child => {
+          const key = child.key;
+          const data = child.val();
+          // prepare normalized searchable string: include studentName, parentName, controlNo, lrn, email, phone
+          const combined = [
+            data.studentName, data.parentName, data.controlNo, data.lrn, data.email, data.phone
+          ].map(x => (x||'')).join(' ').toLowerCase().replace(/\s+/g,' ').trim();
 
-    async function deleteRecord(grade, key, button) {
-      if (confirm("Delete this record?")) {
-        await remove(ref(db, `enrollments/${grade}/${key}`));
-        button.closest(".record").remove();
-        alert("Record deleted successfully!");
-      }
-    }
+          students.push({ key, data, normalizedSearch: combined });
+        });
 
-    searchBar.addEventListener("input", () => {
-      const term = searchBar.value.toLowerCase();
-      const cards = document.querySelectorAll(".record");
-      cards.forEach(card => {
-        card.style.display = card.dataset.search.includes(term) ? "block" : "none";
+        // show newest first (optional) — reverse by timestamp if exists
+        students.sort((a,b) => {
+          const ta = a.data.timestamp || 0;
+          const tb = b.data.timestamp || 0;
+          return tb - ta;
+        });
+
+        applySearchAndRender();
+      }, (err) => {
+        console.error('onValue error', err);
+        listArea.innerHTML = '<p class="no-results">Failed to load enrollments.</p>';
       });
     });
 
-    loadRecords();
+    // search input handling (case/spacing insensitive)
+    searchInput.addEventListener('input', () => applySearchAndRender());
+    clearSearch.addEventListener('click', () => { searchInput.value=''; applySearchAndRender(); });
+
+    // expose some helpers for dev/testing if needed
+    window._debugEnrollments = () => students;
   </script>
 </body>
 </html>
