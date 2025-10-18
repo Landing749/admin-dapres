@@ -88,7 +88,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-    import { getDatabase, ref, onValue, remove, update } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+    import { getDatabase, ref, onValue, remove, update, push } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyAYpXaL6oNhuX3LWAinx7LmhrAozfVzCvk",
@@ -107,7 +107,6 @@
     const gradeSelect = document.getElementById("gradeSelect");
     const results = document.getElementById("results");
     const downloadCsv = document.getElementById("downloadCsv");
-
     let currentData = [];
 
     gradeSelect.addEventListener("change", () => {
@@ -129,52 +128,53 @@
         }
 
         let html = "";
-        let queueCounter = 1;
         currentData = [];
 
         snapshot.forEach((child) => {
           const id = child.key;
           const data = child.val();
 
-          // Auto-generate missing Control/Queue numbers
-          if (!data.controlNo || !data.queueNo) {
-            const updates = {};
-            if (!data.controlNo) updates[`enrollments/${grade}/${id}/controlNo`] = "CTRL-" + Date.now();
-            if (!data.queueNo) updates[`enrollments/${grade}/${id}/queueNo`] = queueCounter++;
-            update(ref(db), updates);
+          // Auto-generate ControlNo if missing
+          if (!data.controlNo) {
+            const newCtrl = "CTRL-" + Date.now();
+            update(ref(db, `enrollments/${grade}/${id}`), { controlNo: newCtrl });
+            data.controlNo = newCtrl;
           }
 
           html += `
-            <div class="card" data-id="${id}">
-              <strong>${data.studentName || "Unnamed Student"}</strong>
+            <div class="card">
+              <h3>${data.studentName || "Unnamed Student"}</h3>
               <div class="card-content">
                 <p><b>Parent:</b> ${data.parentName || "N/A"}</p>
+                <p><b>Email:</b> ${data.email || "N/A"}</p>
                 <p><b>LRN:</b> ${data.lrn || "N/A"}</p>
-                <p><b>Control No.:</b> ${data.controlNo || "(Generating...)"}</p>
-                <p><b>Queue No.:</b> ${data.queueNo || "(Generating...)"}</p>
+                <p><b>Control No.:</b> ${data.controlNo}</p>
                 <button class="delete" data-delete="${id}">Mark as Processed (Delete)</button>
               </div>
-            </div>`;
+            </div>
+          `;
 
           currentData.push({
             studentName: data.studentName || "Unnamed Student",
             parentName: data.parentName || "N/A",
+            email: data.email || "N/A",
             lrn: data.lrn || "N/A",
-            controlNo: data.controlNo || "",
-            queueNo: data.queueNo || "",
+            controlNo: data.controlNo
           });
         });
 
         results.innerHTML = html;
 
+        // Expand/collapse cards
         document.querySelectorAll(".card").forEach((card) => {
           const content = card.querySelector(".card-content");
           card.addEventListener("click", (e) => {
-            if (e.target.tagName === "BUTTON") return;
+            if (e.target.tagName === "BUTTON") return; // ignore delete
             content.style.display = content.style.display === "block" ? "none" : "block";
           });
         });
 
+        // Delete button
         document.querySelectorAll(".delete").forEach((btn) => {
           btn.addEventListener("click", (e) => {
             e.stopPropagation();
@@ -187,16 +187,16 @@
       });
     });
 
-    // 📥 CSV Export
+    // CSV export
     downloadCsv.addEventListener("click", () => {
       if (!currentData.length) {
         alert("No data to export!");
         return;
       }
       const grade = gradeSelect.value;
-      const csvHeader = "Student Name,Parent Name,LRN,Control No,Queue No\n";
+      const csvHeader = "Student Name,Parent Name,Email,LRN,Control No\n";
       const csvRows = currentData.map(
-        d => `"${d.studentName}","${d.parentName}","${d.lrn}","${d.controlNo}","${d.queueNo}"`
+        d => `"${d.studentName}","${d.parentName}","${d.email}","${d.lrn}","${d.controlNo}"`
       );
       const csvContent = csvHeader + csvRows.join("\n");
       const blob = new Blob([csvContent], { type: "text/csv" });
